@@ -317,7 +317,6 @@ void post_fs_data(int client) {
 		stop_magiskhide();
 	} else {
 		exec_common_scripts("post-fs-data");
-		auto_start_magiskhide();
 		handle_modules(late_start_triggered);
 	}
 
