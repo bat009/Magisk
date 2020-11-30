@@ -57,7 +57,7 @@ void reboot();
 void setup_logfile(bool reset);
 
 // Module stuffs
-void handle_modules();
+void handle_modules(bool &skip_modules);
 void magic_mount();
 void disable_modules();
 void remove_modules();

@@ -17,6 +17,7 @@ using namespace std;
 
 static bool pfs_done = false;
 static bool safe_mode = false;
+static bool late_start_triggered = false;
 
 /*********
  * Setup *
@@ -116,7 +117,7 @@ static bool magisk_env() {
 	sprintf(buf, "%s/0/%s/install", APP_DATA_DIR, pkg.data());
 
 	// Alternative binaries paths
-	const char *alt_bin[] = { "/cache/data_adb/magisk", "/data/magisk", buf };
+	const char *alt_bin[] = {"/cache/data_adb/magisk", "/data/magisk", buf};
 	for (auto alt : alt_bin) {
 		struct stat st;
 		if (lstat(alt, &st) == 0) {
@@ -247,7 +248,7 @@ static bool check_key_combo() {
 	if (events.empty())
 		return false;
 
-	run_finally fin([&]{ std::for_each(events.begin(), events.end(), close); });
+	run_finally fin([&] { std::for_each(events.begin(), events.end(), close); });
 
 	// Check if volume down key is held continuously for more than 3 seconds
 	for (int i = 0; i < 300; ++i) {
@@ -317,20 +318,22 @@ void post_fs_data(int client) {
 	} else {
 		exec_common_scripts("post-fs-data");
 		auto_start_magiskhide();
-		handle_modules();
+		handle_modules(late_start_triggered);
 	}
-
-	pfs_done = true;
 
 early_abort:
 	// We still do magic mount because root itself might need it
 	magic_mount();
-
+	pfs_done = true;
 unblock_init:
-	close(xopen(UNBLOCKFILE, O_RDONLY | O_CREAT, 0));
+	if (late_start_triggered)
+		LOGE("* late_start mode triggered before pfs done\n");
+	else
+		close(xopen(UNBLOCKFILE, O_RDONLY | O_CREAT, 0));
 }
 
 void late_start(int client) {
+	late_start_triggered = true;
 	LOGI("** late_start service mode running\n");
 	// ack
 	write_int(client, 0);
@@ -338,8 +341,10 @@ void late_start(int client) {
 
 	setup_logfile(false);
 
-	if (!pfs_done || safe_mode)
+	if (!pfs_done || safe_mode) {
+		LOGW("* skip exec service mode scripts\n");
 		return;
+	}
 
 	exec_common_scripts("service");
 	exec_module_scripts("service");

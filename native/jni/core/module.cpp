@@ -676,14 +676,15 @@ static void collect_modules() {
 	});
 }
 
-void handle_modules() {
+void handle_modules(bool &skip_modules) {
 	prepare_modules();
 	collect_modules();
 	exec_module_scripts("post-fs-data");
 
 	// Recollect modules (module scripts could remove itself)
 	module_list.clear();
-	collect_modules();
+	if(!skip_modules)
+		collect_modules();
 }
 
 void disable_modules() {
