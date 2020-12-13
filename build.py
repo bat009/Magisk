@@ -4,18 +4,25 @@ import os
 import subprocess
 
 is_windows = os.name == 'nt'
-if is_windows:
+is_ci = 'CI' in os.environ and os.environ['CI'] == 'true'
+if is_windows and not is_ci:
     import colorama
     colorama.init()
 
 
 def error(str):
-    print('\n' + '\033[41m' + str + '\033[0m' + '\n')
+    if is_ci:
+        print('\n' + '! ' + str + '\n')
+    else:
+        print('\n' + '\033[41m' + str + '\033[0m' + '\n')
     sys.exit(1)
 
 
 def header(str):
-    print('\n' + '\033[44m' + str + '\033[0m' + '\n')
+    if is_ci:
+        print('\n' + str + '\n')
+    else:
+        print('\n' + '\033[44m' + str + '\033[0m' + '\n')
 
 
 def vprint(str):
@@ -54,9 +61,6 @@ archs = ['armeabi-v7a', 'x86']
 arch64 = ['arm64-v8a', 'x86_64']
 support_targets = ['magisk', 'magiskinit', 'magiskboot', 'magiskpolicy', 'resetprop', 'busybox', 'test']
 default_targets = ['magisk', 'magiskinit', 'magiskboot', 'busybox']
-
-ndk_ver = '21d'
-ndk_ver_full = '21.3.6528147'
 
 ndk_root = op.join(os.environ['ANDROID_SDK_ROOT'], 'ndk')
 ndk_path = op.join(ndk_root, 'magisk')
@@ -141,12 +145,14 @@ def parse_props(file):
 
 
 def load_config(args):
-    commit_hash = cmd_out(['git', 'rev-parse', '--short=8', 'refs/heads/master'])
-    commit_count = cmd_out(['git', 'rev-list', '--count', 'refs/heads/master'])
+    commit_hash = cmd_out(['git', 'rev-parse', '--short=8', 'refs/remotes/origin/master'])
+    commit_count = cmd_out(['git', 'rev-list', '--count', 'refs/remotes/origin/master'])
+
+    config.update(parse_props('gradle.properties'))
 
     # Some default values
     config['version'] = commit_hash
-    config['versionCode'] = 2147483647
+    config['versionCode'] = int(config['baseVersionCode']) + 99
     config['appVersion'] = commit_hash
     config['appVersionCode'] = commit_count
     config['outdir'] = 'out'
@@ -162,7 +168,8 @@ def load_config(args):
     config['prettyName'] = config['prettyName'].lower() == 'true'
 
     try:
-        config['versionCode'] = int(config['versionCode'])
+        if 'versionCount' in config:
+            config['versionCode'] = int(config['baseVersionCode']) + int(config['versionCount'])
     except ValueError:
         error('Config error: "versionCode" is required to be an integer')
 
@@ -201,7 +208,7 @@ def clean_elf():
 
 
 def sign_zip(unsigned, output, release):
-    if not release:
+    if not release or is_ci:
         mv(unsigned, output)
         return
 
@@ -289,7 +296,7 @@ def dump_bin_headers():
 def build_binary(args):
     # Verify NDK install
     props = parse_props(op.join(ndk_path, 'source.properties'))
-    if props['Pkg.Revision'] != ndk_ver_full:
+    if props['Pkg.Revision'] != config['ndkVerFull']:
         error('Incorrect NDK. Please install/upgrade NDK with "build.py ndk"')
 
     if args.target:
@@ -522,7 +529,7 @@ def cleanup(args):
 
 def setup_ndk(args):
     os_name = platform.system().lower()
-    url = f'https://dl.google.com/android/repository/android-ndk-r{ndk_ver}-{os_name}-x86_64.zip'
+    url = f'https://dl.google.com/android/repository/android-ndk-r{config["ndkVer"]}-{os_name}-x86_64.zip'
     ndk_zip = url.split('/')[-1]
 
     header(f'* Downloading {ndk_zip}')
@@ -539,7 +546,7 @@ def setup_ndk(args):
                 unix_attributes = info.external_attr >> 16
             if unix_attributes:
                 os.chmod(extracted_path, unix_attributes)
-    mv(op.join(ndk_root, f'android-ndk-r{ndk_ver}'), ndk_path)
+    mv(op.join(ndk_root, f'android-ndk-r{config["ndkVer"]}'), ndk_path)
 
     header('* Removing unnecessary files')
     for dirname, subdirs, _ in os.walk(op.join(ndk_path, 'platforms')):
