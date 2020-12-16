@@ -75,6 +75,7 @@ object Config : PreferenceModel, DBConfig {
         const val BETA_CHANNEL = 1
         const val CUSTOM_CHANNEL = 2
         const val CANARY_CHANNEL = 3
+        const val ALPHA_CHANNEL = 4
 
         // root access mode
         const val ROOT_ACCESS_DISABLED = 0
@@ -109,11 +110,7 @@ object Config : PreferenceModel, DBConfig {
         const val ORDER_DATE = 1
     }
 
-    private val defaultChannel =
-        if (BuildConfig.DEBUG)
-            Value.CANARY_CHANNEL
-        else
-            Value.DEFAULT_CHANNEL
+    private val defaultChannel = Value.ALPHA_CHANNEL
 
     @JvmStatic var keepVerity = false
     @JvmStatic var keepEnc = false
